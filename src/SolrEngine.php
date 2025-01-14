@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Laravel\Scout\Builder;
 use Laravel\Scout\Engines\Engine;
 use Solarium\Client;
+use Solarium\Core\Query\QueryInterface;
 
 class SolrEngine extends Engine
 {
@@ -197,7 +198,7 @@ class SolrEngine extends Engine
         $selectQuery = $this->client->createSelect();
 
         $conditions = (empty($builder->query)) ? [] : [$builder->query];
-        $conditions = array_merge($conditions, $this->filters($builder));
+        $this->filters($selectQuery, $builder);
 
         $selectQuery->setQuery(implode(' ', $conditions));
 
@@ -216,10 +217,16 @@ class SolrEngine extends Engine
      * @param  \Laravel\Scout\Builder  $builder
      * @return array
      */
-    protected function filters(Builder $builder)
+    protected function filters(QueryInterface $query, Builder $builder)
     {
-        return collect($builder->wheres)->map(function ($value, $key) {
-            return sprintf('%s:"%s"', $key, $value);
-        })->values()->all();
+        if (is_array($builder->wheres)) {
+            $wheres = collect($builder->wheres)->mapWithKeys(function ($value, $key) {
+                return [$key => sprintf('%s:"%s"', $key, $value)];
+            })->all();
+
+            foreach ($wheres as $key => $value) {
+                $query->createFilterQuery($key)->setQuery($value);
+            }
+        }
     }
 }
